@@ -53,16 +53,21 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
             
             if mcap >= min_mcap_absolute:
                 roe = info.get('returnOnEquity', None)
+                # Fetch recent quarterly profit growth
+                profit_growth = info.get('earningsQuarterlyGrowth', None) 
+                
                 data.append({
                     "Ticker": clean_ticker,
                     "Market_Cap_Cr": round(mcap / 10000000, 2),
                     "TTM_PE": info.get('trailingPE', None),
-                    "ROE_Pct": round(roe * 100, 2) if roe else None
+                    "ROE_Pct": round(roe * 100, 2) if roe else None,
+                    "Qtr_Profit_Growth_Pct": round(profit_growth * 100, 2) if profit_growth else None
                 })
         except Exception:
             continue
             
-    return pd.DataFrame(data).dropna()
+    # Drop rows only if essential metrics are missing to keep the dataframe clean
+    return pd.DataFrame(data).dropna(subset=["TTM_PE", "ROE_Pct"])
 
 # --- TABS LAYOUT ---
 tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener"])
