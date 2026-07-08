@@ -36,39 +36,42 @@ def fetch_mock_data():
     return pd.DataFrame(data)
 
 # 2. Live Data Fetcher (for Tab 2 Live Screener)
-@st.cache_data(show_spinner=False)
-def pull_live_market_data(ticker_list, min_mcap_cr=1000, _progress_bar=None): 
+@st.cache_data(show_spinner=True) # show_spinner=True gives you a built-in loading indicator
+def pull_live_market_data(ticker_list, min_mcap_cr=1000):
     data = []
     min_mcap_absolute = min_mcap_cr * 10000000
     
-    # Check if the progress bar was provided before using it
-    if _progress_bar:
-        total_tickers = len(ticker_list)
-    
-    for i, ticker in enumerate(ticker_list):
+    for ticker in ticker_list:
         clean_ticker = ticker.strip().upper()
         if not clean_ticker: continue
         
         try:
-            # Your data fetching logic
             stock = yf.Ticker(f"{clean_ticker}.NS")
             info = stock.info
             mcap = info.get('marketCap', 0)
             
             if mcap >= min_mcap_absolute:
-                # ... (your income statement growth calculation logic) ...
-                data.append({...})
+                financials = stock.financials
+                yearly_growth = None
+                if financials is not None and not financials.empty and 'Net Income' in financials.index:
+                    net_income = financials.loc['Net Income']
+                    if len(net_income) >= 2:
+                        yearly_growth = ((net_income.iloc[0] - net_income.iloc[1]) / net_income.iloc[1]) * 100
+                
+                roe = info.get('returnOnEquity', None)
+                data.append({
+                    "Ticker": clean_ticker,
+                    "Market_Cap_Cr": round(mcap / 10000000, 2),
+                    "TTM_PE": info.get('trailingPE', None),
+                    "ROE_Pct": round(roe * 100, 2) if roe else None,
+                    "Yearly_Profit_Growth_Pct": round(yearly_growth, 2) if yearly_growth is not None else None
+                })
         except Exception:
             continue
-        
-        # Update progress bar using the underscore version
-        if _progress_bar:
-            _progress_bar.progress((i + 1) / total_tickers, text=f"Processing {clean_ticker}... ({i+1}/{total_tickers})")
-    
-    if _progress_bar:
-        _progress_bar.empty()
-        
+            
     return pd.DataFrame(data).dropna(subset=["TTM_PE", "ROE_Pct"])
+
+
 # --- TABS LAYOUT ---
 tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener"])
 
@@ -146,10 +149,11 @@ with tab2:
         # 1. Define ticker_list HERE, inside the button scope
         ticker_list = [t.strip() for t in ticker_input.split(",")]
         # Before calling the function, initialize the progress bar
-        progress_bar = st.progress(0, text="Fetching data from Yahoo Finance...")
+        # progress_bar = st.progress(0, text="Fetching data from Yahoo Finance...")
 
         # Now call the function with the progress_bar argument
-        live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input, progress_bar=progress_bar)
+        # live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input, progress_bar=progress_bar)
+        live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
         # ... (keep your existing pull_live_market_data call here) ...
         # live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
         st.session_state['live_df'] = live_df
