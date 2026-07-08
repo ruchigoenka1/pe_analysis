@@ -140,11 +140,14 @@ with tab1:
 # ==========================================
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
+# ==========================================
+# TAB 2: LIVE MARKET SCREENER (Final Version)
+# ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
     
-    # Input Area
-    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS"
+    # 1. Inputs
+    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS, ADANIENT, JSWSTEEL, ASIANPAINT"
     ticker_input = st.text_area("Enter NSE Tickers (comma separated):", value=default_tickers)
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
@@ -153,57 +156,61 @@ with tab2:
         # Fetch data (caching handles the spinner)
         st.session_state['live_df'] = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
     
-    # Only show analysis if data exists
+    # 2. Filter & Display Logic
     if 'live_df' in st.session_state and not st.session_state['live_df'].empty:
         df = st.session_state['live_df']
         
-        # --- FILTERS ---
-# --- FILTERS ---
         st.sidebar.markdown("### Data Filters")
         
-        # P/E Filter
+        # Sliders
         min_pe, max_pe = st.sidebar.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())))
-        
-        # ROE Filter
         min_roe, max_roe = st.sidebar.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())))
         
-        # Growth Filter: Safely handle NaN values by dropping them for slider calculation
         growth_data = df["Yearly_Profit_Growth_Pct"].dropna()
         if not growth_data.empty:
-            min_growth, max_growth = st.sidebar.slider(
-                "Yearly Profit Growth (%)", 
-                float(growth_data.min()), float(growth_data.max()), 
-                (float(growth_data.min()), float(growth_data.max()))
-            )
+            min_growth, max_growth = st.sidebar.slider("Yearly Profit Growth (%)", float(growth_data.min()), float(growth_data.max()), (float(growth_data.min()), float(growth_data.max())))
         else:
-            min_growth, max_growth = -100.0, 100.0 # Fallback if no growth data exists
-        
-        # Apply all filters
+            min_growth, max_growth = -100.0, 100.0 
+
+        # Apply Filters
         filtered_df = df[
             (df["TTM_PE"].between(min_pe, max_pe)) &
             (df["ROE_Pct"].between(min_roe, max_roe)) &
             (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
         ]
         
-        # --- GRAPH ---
-        fig2 = px.scatter(
-            filtered_df, x="Yearly_Profit_Growth_Pct", y="ROE_Pct", 
-            size="Market_Cap_Cr", color="TTM_PE", hover_name="Ticker",
-            title="Growth vs ROE Matrix"
-        )
-        fig2.update_layout(height=700, plot_bgcolor="#0f172a", paper_bgcolor="#0f172a", font=dict(color="#f8fafc"))
-        st.plotly_chart(fig2, use_container_width=True)
-        
-        # --- THE TABLE ---
-        st.markdown("### Screened Data Table")
-        st.dataframe(
-            filtered_df.style.format({
-                "Market_Cap_Cr": "{:,.0f} Cr", 
-                "TTM_PE": "{:.2f}x", 
-                "ROE_Pct": "{:.2f}%",
-                "Yearly_Profit_Growth_Pct": "{:.2f}%"
-            }), 
-            use_container_width=True
-        )
-    elif 'live_df' in st.session_state and st.session_state['live_df'].empty:
-        st.warning("No data found for the given criteria.")
+        # 3. Reactive Heatmap
+        if not filtered_df.empty:
+            fig2 = px.scatter(
+                filtered_df, 
+                x="Yearly_Profit_Growth_Pct", 
+                y="ROE_Pct", 
+                size="Market_Cap_Cr", 
+                color="TTM_PE", 
+                hover_name="Ticker",
+                color_continuous_scale=["#1e40af", "#ef4444"], # Blue to Red
+                range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
+                title=f"Filtered Matrix: {len(filtered_df)} Stocks"
+            )
+            fig2.update_layout(
+                height=700, 
+                plot_bgcolor="#0f172a", 
+                paper_bgcolor="#0f172a", 
+                font=dict(color="#f8fafc")
+            )
+            fig2.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
+            st.plotly_chart(fig2, use_container_width=True)
+            
+            # 4. Filtered Data Table
+            st.markdown("### Screened Data Table")
+            st.dataframe(
+                filtered_df.style.format({
+                    "Market_Cap_Cr": "{:,.0f} Cr", 
+                    "TTM_PE": "{:.2f}x", 
+                    "ROE_Pct": "{:.2f}%",
+                    "Yearly_Profit_Growth_Pct": "{:.2f}%"
+                }), 
+                use_container_width=True
+            )
+        else:
+            st.warning("No stocks match the selected filter criteria.")
