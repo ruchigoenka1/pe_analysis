@@ -46,27 +46,35 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
         if not clean_ticker: continue
         
         try:
-            # Append .NS for Indian National Stock Exchange
-            stock = yf.Ticker(f"{clean_ticker}.NS") 
+            stock = yf.Ticker(f"{clean_ticker}.NS")
             info = stock.info
             mcap = info.get('marketCap', 0)
             
             if mcap >= min_mcap_absolute:
-                roe = info.get('returnOnEquity', None)
-                # Fetch recent quarterly profit growth
-                profit_growth = info.get('earningsQuarterlyGrowth', None) 
+                # Fetch annual income statement
+                financials = stock.financials
+                if financials is not None and not financials.empty:
+                    # Net Income is usually the first row in annual financials
+                    net_income = financials.loc['Net Income']
+                    # Calculate YoY Growth: (Current Year - Previous Year) / Previous Year
+                    if len(net_income) >= 2:
+                        yearly_growth = ((net_income.iloc[0] - net_income.iloc[1]) / net_income.iloc[1]) * 100
+                    else:
+                        yearly_growth = None
+                else:
+                    yearly_growth = None
                 
+                roe = info.get('returnOnEquity', None)
                 data.append({
                     "Ticker": clean_ticker,
                     "Market_Cap_Cr": round(mcap / 10000000, 2),
                     "TTM_PE": info.get('trailingPE', None),
                     "ROE_Pct": round(roe * 100, 2) if roe else None,
-                    "Qtr_Profit_Growth_Pct": round(profit_growth * 100, 2) if profit_growth else None
+                    "Yearly_Profit_Growth_Pct": round(yearly_growth, 2) if yearly_growth is not None else None
                 })
         except Exception:
             continue
             
-    # Drop rows only if essential metrics are missing to keep the dataframe clean
     return pd.DataFrame(data).dropna(subset=["TTM_PE", "ROE_Pct"])
 
 # --- TABS LAYOUT ---
