@@ -135,13 +135,7 @@ with tab1:
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
 # ==========================================
-# TAB 2: LIVE MARKET SCREENER (Updated)
-# ==========================================
-# ==========================================
 # TAB 2: LIVE MARKET SCREENER
-# ==========================================
-# ==========================================
-# TAB 2: LIVE MARKET SCREENER (Final Version)
 # ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
@@ -153,7 +147,7 @@ with tab2:
     
     if st.button("Fetch Live Data", type="primary"):
         ticker_list = [t.strip() for t in ticker_input.split(",")]
-        # Fetch data (caching handles the spinner)
+        # Note: Ensure pull_live_market_data is defined at the top of your script
         st.session_state['live_df'] = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
     
     # 2. Filter & Display Logic
@@ -179,7 +173,7 @@ with tab2:
             (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
         ]
         
-        # 3. Reactive Heatmap
+        # 3. Reactive Heatmap (Light Blue to Deep Red)
         if not filtered_df.empty:
             fig2 = px.scatter(
                 filtered_df, 
@@ -188,7 +182,8 @@ with tab2:
                 size="Market_Cap_Cr", 
                 color="TTM_PE", 
                 hover_name="Ticker",
-                color_continuous_scale=["#1e40af", "#ef4444"], # Blue to Red
+                # Heatmap: Light blue (#bae6fd) -> Mid-red (#f87171) -> Deep red (#991b1b)
+                color_continuous_scale=["#bae6fd", "#f87171", "#991b1b"], 
                 range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
             )
@@ -198,7 +193,7 @@ with tab2:
                 paper_bgcolor="#0f172a", 
                 font=dict(color="#f8fafc")
             )
-            fig2.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
+            fig2.update_traces(marker=dict(line=dict(width=1, color="#ffffff")))
             st.plotly_chart(fig2, use_container_width=True)
             
             # 4. Filtered Data Table
