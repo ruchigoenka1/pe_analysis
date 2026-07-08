@@ -5,179 +5,168 @@ import yfinance as yf
 import plotly.express as px
 from sklearn.ensemble import RandomForestRegressor
 
-# Page Config: Set layout to wide
+# Page Config: Dark mode professional layout
 st.set_page_config(page_title="Advanced Indian Equity Screener & Valuation Model", layout="wide")
+st.title("Indian Equity Valuation Platform")
 
-# --- 1. DATA ACQUISITION & SIMULATION ---
+# --- DATA FUNCTIONS ---
+
+# 1. Simulated Data (for Tab 1 Advanced Matrix)
 @st.cache_data
-def fetch_stock_data():
+def fetch_mock_data():
     nifty_tickers = [
-        "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "HINDUNILVR.NS",
-        "ITC.NS", "LT.NS", "ASIANPAINT.NS", "AXISBANK.NS", "BAJFINANCE.NS",
-        "MARUTI.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "TATASTEEL.NS",
-        "NESTLEIND.NS", "WIPRO.NS", "M&M.NS", "HCLTECH.NS", "POWERGRID.NS",
-        "PIDILITIND.NS", "APOLLOHOSP.NS", "HINDALCO.NS", "DIVISLAB.NS", "GRASIM.NS"
+        "RELIANCE", "TCS", "HDFCBANK", "INFY", "HINDUNILVR", "ITC", "LT", 
+        "ASIANPAINT", "AXISBANK", "BAJFINANCE", "MARUTI", "SUNPHARMA", "TITAN"
     ]
-    
     data = []
-    np.random.seed(42) # For reproducible mock data
-    
+    np.random.seed(42)
     for ticker in nifty_tickers:
+        hist_roe = np.random.uniform(8, 35)
+        fwd_pe = np.random.uniform(15, 80)
+        data.append({
+            "Ticker": ticker,
+            "Market_Cap_Cr": np.random.uniform(50000, 1500000),
+            "Historical_ROE": round(hist_roe, 2),
+            "Forward_ROE": round(hist_roe * np.random.uniform(0.9, 1.2), 2),
+            "Growth_5Y": round(np.random.uniform(5, 25), 2),
+            "TTM_PE": round(fwd_pe * np.random.uniform(0.8, 1.3), 2),
+            "Forward_PE": round(fwd_pe, 2),
+            "Leverage_DE": round(np.random.uniform(0.0, 2.5), 2)
+        })
+    return pd.DataFrame(data)
+
+# 2. Live Data Fetcher (for Tab 2 Live Screener)
+@st.cache_data(show_spinner=False)
+def pull_live_market_data(ticker_list, min_mcap_cr=1000):
+    data = []
+    min_mcap_absolute = min_mcap_cr * 10000000 
+    
+    for ticker in ticker_list:
+        clean_ticker = ticker.strip().upper()
+        if not clean_ticker: continue
+        
         try:
-            hist_roe = np.random.uniform(8, 35)
-            fwd_pe = np.random.uniform(15, 80)
+            # Append .NS for Indian National Stock Exchange
+            stock = yf.Ticker(f"{clean_ticker}.NS") 
+            info = stock.info
+            mcap = info.get('marketCap', 0)
             
-            data.append({
-                "Ticker": ticker.replace(".NS", ""),
-                "Market_Cap_Cr": np.random.uniform(50000, 1500000),
-                "Historical_ROE": round(hist_roe, 2),
-                "Forward_ROE": round(hist_roe * np.random.uniform(0.9, 1.2), 2),
-                "Growth_3Y": round(np.random.uniform(5, 30), 2),
-                "Growth_5Y": round(np.random.uniform(5, 25), 2),
-                "Growth_10Y": round(np.random.uniform(5, 20), 2),
-                "TTM_PE": round(fwd_pe * np.random.uniform(0.8, 1.3), 2),
-                "Forward_PE": round(fwd_pe, 2),
-                "Forward_EPS": round(np.random.uniform(20, 200), 2),
-                "Leverage_DE": round(np.random.uniform(0.0, 2.5), 2)
-            })
+            if mcap >= min_mcap_absolute:
+                roe = info.get('returnOnEquity', None)
+                data.append({
+                    "Ticker": clean_ticker,
+                    "Market_Cap_Cr": round(mcap / 10000000, 2),
+                    "TTM_PE": info.get('trailingPE', None),
+                    "ROE_Pct": round(roe * 100, 2) if roe else None
+                })
         except Exception:
             continue
             
-    return pd.DataFrame(data)
+    return pd.DataFrame(data).dropna()
 
-df = fetch_stock_data()
+# --- TABS LAYOUT ---
+tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener"])
 
-# --- 2. SIDEBAR FILTERS ---
-st.sidebar.header("Fundamental Filters")
-
-min_hist_roe = st.sidebar.slider("Min Historical ROE (%)", 0.0, 40.0, 15.0)
-min_fwd_roe = st.sidebar.slider("Min Forward ROE (%)", 0.0, 40.0, 15.0)
-min_growth_5y = st.sidebar.slider("Min 5Y Hist Growth (%)", 0.0, 30.0, 10.0)
-max_leverage = st.sidebar.slider("Max Leverage (D/E Ratio)", 0.0, 3.0, 2.0)
-max_ttm_pe = st.sidebar.slider("Max TTM P/E", 10.0, 150.0, 100.0)
-max_fwd_pe = st.sidebar.slider("Max Forward P/E", 10.0, 150.0, 100.0)
-min_fwd_eps = st.sidebar.number_input("Min Forward EPS (₹)", value=10.0)
-
-# Apply Filters
-filtered_df = df[
-    (df["Historical_ROE"] >= min_hist_roe) &
-    (df["Forward_ROE"] >= min_fwd_roe) &
-    (df["Growth_5Y"] >= min_growth_5y) &
-    (df["Leverage_DE"] <= max_leverage) &
-    (df["TTM_PE"] <= max_ttm_pe) &
-    (df["Forward_PE"] <= max_fwd_pe) &
-    (df["Forward_EPS"] >= min_fwd_eps)
-]
-
-# --- 3. MAIN DASHBOARD VISUALIZATION ---
-st.title("Indian Equity Valuation Matrix")
-st.markdown("### Cross-Sectional Analysis & Forward P/E Prediction")
-
-if not filtered_df.empty:
-    fig = px.scatter(
-        filtered_df,
-        x="Growth_5Y",
-        y="Forward_ROE",
-        size="Market_Cap_Cr",
-        color="Forward_PE",
-        hover_name="Ticker",
-        # Custom high-contrast scale for dark mode: solid blue to vibrant coral-red
-        color_continuous_scale=["#1e40af", "#ef4444"], 
-        labels={
-            "Growth_5Y": "5-Year Historical Growth (%)",
-            "Forward_ROE": "Consensus Forward ROE (%)",
-            "Forward_PE": "Fwd P/E"
-        },
-        title="Quality vs Valuation Matrix (Size = Market Cap, Color = Fwd P/E)"
-    )
+# ==========================================
+# TAB 1: ADVANCED VALUATION & ML
+# ==========================================
+with tab1:
+    st.markdown("### Cross-Sectional Analysis (Historical & Forward Estimates)")
     
-    # Apply deep dark theme formatting
-    fig.update_layout(
-        plot_bgcolor="#0f172a",   # Slate 900 background for the graph plot
-        paper_bgcolor="#0f172a",  # Match entire component canvas area
-        font=dict(color="#f8fafc"), # Crisp white text labels
-        coloraxis_colorbar=dict(title="Fwd P/E", title_font=dict(color="#f8fafc"), tickfont=dict(color="#f8fafc")),
-        xaxis=dict(
-            showgrid=True, 
-            gridcolor="#334155",  # Subtle grid lines
-            zeroline=True, 
-            zerolinecolor="#64748b",
-            tickfont=dict(color="#cbd5e1")
-        ),
-        yaxis=dict(
-            showgrid=True, 
-            gridcolor="#334155", 
-            zeroline=True, 
-            zerolinecolor="#64748b",
-            tickfont=dict(color="#cbd5e1")
-        ),
-    )
+    df_mock = fetch_mock_data()
     
-    # Give bubbles a glowing border to make them distinctly pop
-    fig.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
-    
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.warning("No stocks match the current filter criteria.")
+    # Filters specific to Tab 1
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        min_hist_roe = st.slider("Min Historical ROE (%)", 0.0, 40.0, 15.0, key="t1_roe")
+    with col_b:
+        min_growth_5y = st.slider("Min 5Y Hist Growth (%)", 0.0, 30.0, 10.0, key="t1_growth")
+    with col_c:
+        max_ttm_pe = st.slider("Max TTM P/E", 10.0, 150.0, 100.0, key="t1_pe")
 
-# Formatted Data Table
-st.dataframe(
-    filtered_df.style.format({
-        "Market_Cap_Cr": "{:,.0f}", 
-        "Historical_ROE": "{:.1f}%", 
-        "Forward_ROE": "{:.1f}%", 
-        "Growth_3Y": "{:.1f}%", 
-        "Growth_5Y": "{:.1f}%", 
-        "Growth_10Y": "{:.1f}%", 
-        "Leverage_DE": "{:.2f}x"
-    }), 
-    use_container_width=True
-)
+    filtered_mock = df_mock[
+        (df_mock["Historical_ROE"] >= min_hist_roe) &
+        (df_mock["Growth_5Y"] >= min_growth_5y) &
+        (df_mock["TTM_PE"] <= max_ttm_pe)
+    ]
 
-# --- 4. MACHINE LEARNING VALUATION ENGINE ---
-st.markdown("---")
-st.subheader("Valuation Engine: Forward P/E Predictor")
-st.markdown("This Random Forest model trains dynamically on your filtered cross-section to gauge consensus market pricing trends based on your criteria.")
+    if not filtered_mock.empty:
+        fig1 = px.scatter(
+            filtered_mock, x="Growth_5Y", y="Forward_ROE", size="Market_Cap_Cr", color="Forward_PE",
+            hover_name="Ticker", color_continuous_scale=["#1e40af", "#ef4444"], 
+            title="Quality vs Valuation Matrix"
+        )
+        fig1.update_layout(
+            plot_bgcolor="#0f172a", paper_bgcolor="#0f172a", font=dict(color="#f8fafc"),
+            xaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b"),
+            yaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b")
+        )
+        fig1.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.warning("No stocks match the criteria.")
 
-features = ["Historical_ROE", "Forward_ROE", "Growth_5Y", "Leverage_DE"]
-target = "Forward_PE"
-
-if len(filtered_df) > 5:
-    X = filtered_df[features]
-    y = filtered_df[target]
+    st.markdown("---")
+    st.subheader("Valuation Engine: Forward P/E Predictor")
     
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X, y)
-    
-    st.markdown("**Test a Hypothetical Company Profile:**")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        test_hist_roe = st.number_input("Historical ROE (%)", value=20.0)
-    with col2:
-        test_fwd_roe = st.number_input("Forward ROE (%)", value=22.0)
-    with col3:
-        test_growth = st.number_input("5Y Growth (%)", value=15.0)
-    with col4:
-        test_lev = st.number_input("Leverage (D/E)", value=0.5)
+    if len(filtered_mock) > 5:
+        features = ["Historical_ROE", "Growth_5Y", "Leverage_DE"]
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(filtered_mock[features], filtered_mock["Forward_PE"])
         
-    prediction = model.predict([[test_hist_roe, test_fwd_roe, test_growth, test_lev]])
-    
-    st.metric(
-        label="Predicted Fair Forward P/E", 
-        value=f"{prediction[0]:.2f}x",
-        delta="Based on current cross-sectional data regression",
-        delta_color="off"
-    )
-    
-    # Feature Importance Summary
-    importance = pd.DataFrame({
-        'Metric': features,
-        'Importance Weight': model.feature_importances_
-    }).sort_values(by='Importance Weight', ascending=False)
-    
-    st.markdown("**What fundamental metrics are driving valuation variance in this cohort?**")
-    st.bar_chart(importance.set_index('Metric'), color="#3b82f6")
+        st.markdown("**Test a Hypothetical Company Profile:**")
+        mc1, mc2, mc3 = st.columns(3)
+        test_hist_roe = mc1.number_input("Historical ROE (%)", value=20.0)
+        test_growth = mc2.number_input("5Y Growth (%)", value=15.0)
+        test_lev = mc3.number_input("Leverage (D/E)", value=0.5)
+            
+        pred = model.predict([[test_hist_roe, test_growth, test_lev]])
+        st.metric("Predicted Fair Forward P/E", f"{pred[0]:.2f}x")
 
-else:
-    st.info("Expand your filters above. The machine learning model requires at least 5 companies in the current viewport to calculate weights properly.")
+# ==========================================
+# TAB 2: LIVE MARKET SCREENER
+# ==========================================
+with tab2:
+    st.markdown("### Live Market Data Pull (Yahoo Finance)")
+    st.markdown("Fetches real-time Market Cap, TTM P/E, and ROE. Filters out companies below your Market Cap threshold.")
+    
+    # Input list of tickers
+    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, SUZLON, IDEA, TATAMOTORS, LICI"
+    ticker_input = st.text_area("Enter NSE Tickers (comma separated):", value=default_tickers)
+    min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
+    
+    if st.button("Fetch Live Data", type="primary"):
+        with st.spinner("Fetching data from Yahoo Finance..."):
+            ticker_list = [t.strip() for t in ticker_input.split(",")]
+            live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
+            
+            if not live_df.empty:
+                st.success(f"Successfully pulled data for {len(live_df)} companies meeting the criteria.")
+                
+                # Dark theme plot for live data
+                fig2 = px.scatter(
+                    live_df, x="ROE_Pct", y="TTM_PE", size="Market_Cap_Cr", color="TTM_PE",
+                    hover_name="Ticker", color_continuous_scale=["#1e40af", "#ef4444"], 
+                    labels={"ROE_Pct": "Return on Equity (%)", "TTM_PE": "Trailing P/E Ratio"},
+                    title=f"Live ROE vs P/E Matrix (Market Cap > {min_mcap_input} Cr)"
+                )
+                fig2.update_layout(
+                    plot_bgcolor="#0f172a", paper_bgcolor="#0f172a", font=dict(color="#f8fafc"),
+                    xaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b"),
+                    yaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b")
+                )
+                fig2.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
+                
+                st.plotly_chart(fig2, use_container_width=True)
+                
+                # Formatted DataFrame
+                st.dataframe(
+                    live_df.style.format({
+                        "Market_Cap_Cr": "{:,.0f} Cr", 
+                        "TTM_PE": "{:.2f}x", 
+                        "ROE_Pct": "{:.2f}%"
+                    }), 
+                    use_container_width=True
+                )
+            else:
+                st.error("No companies found or none met the >1000 Cr Market Cap threshold.")
