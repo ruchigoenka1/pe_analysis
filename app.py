@@ -141,6 +141,9 @@ with tab1:
 # ==========================================
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
+# ==========================================
+# TAB 2: LIVE MARKET SCREENER
+# ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
     
@@ -153,27 +156,36 @@ with tab2:
         st.session_state['live_df'] = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
     
     if 'live_df' in st.session_state and not st.session_state['live_df'].empty:
-        df = st.session_state['live_df']
+        df = st.session_state['live_df'].copy() # Use a copy to prevent state mutation warnings
+        
+        # --- CRITICAL FIX: Force strict numeric types to prevent silent filtering failures ---
+        df["TTM_PE"] = pd.to_numeric(df["TTM_PE"], errors='coerce')
+        df["ROE_Pct"] = pd.to_numeric(df["ROE_Pct"], errors='coerce')
+        df["Yearly_Profit_Growth_Pct"] = pd.to_numeric(df["Yearly_Profit_Growth_Pct"], errors='coerce')
+        
+        # Drop any rows that couldn't be converted to numbers
+        df = df.dropna(subset=["TTM_PE", "ROE_Pct"])
         
         # Collapsible Live Data Filters
         with st.expander("⚙️ Screen & Filter Live Data", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
-                min_pe, max_pe = st.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())))
+                # Added explicit keys to lock Streamlit state
+                min_pe, max_pe = st.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())), key="live_pe")
             with col2:
-                min_roe, max_roe = st.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())))
+                min_roe, max_roe = st.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())), key="live_roe")
             with col3:
                 growth_data = df["Yearly_Profit_Growth_Pct"].dropna()
                 if not growth_data.empty:
-                    min_growth, max_growth = st.slider("Yearly Profit Growth (%)", float(growth_data.min()), float(growth_data.max()), (float(growth_data.min()), float(growth_data.max())))
+                    min_growth, max_growth = st.slider("Yearly Profit Growth (%)", float(growth_data.min()), float(growth_data.max()), (float(growth_data.min()), float(growth_data.max())), key="live_growth")
                 else:
                     min_growth, max_growth = -100.0, 100.0 
 
-        # FIX 2: Apply Filters using explicit >= and <= operators
+        # Apply Filters (Explicit float comparison)
         filtered_df = df[
-            (df["TTM_PE"] >= min_pe) & (df["TTM_PE"] <= max_pe) &
-            (df["ROE_Pct"] >= min_roe) & (df["ROE_Pct"] <= max_roe) &
-            (df["Yearly_Profit_Growth_Pct"] >= min_growth) & (df["Yearly_Profit_Growth_Pct"] <= max_growth)
+            (df["TTM_PE"] >= float(min_pe)) & (df["TTM_PE"] <= float(max_pe)) &
+            (df["ROE_Pct"] >= float(min_roe)) & (df["ROE_Pct"] <= float(max_roe)) &
+            ((df["Yearly_Profit_Growth_Pct"] >= float(min_growth)) & (df["Yearly_Profit_Growth_Pct"] <= float(max_growth)) | df["Yearly_Profit_Growth_Pct"].isna())
         ]
         
         if not filtered_df.empty:
@@ -196,7 +208,7 @@ with tab2:
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
             )
             
-            # FIX 3: Minimalist white background with blue outlines and axis fonts for max visibility
+            # Minimalist white background with blue outlines and axis fonts for max visibility
             fig2.update_layout(
                 height=700, 
                 plot_bgcolor="white", 
