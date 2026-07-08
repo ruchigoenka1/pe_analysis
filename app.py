@@ -154,12 +154,12 @@ with tab1:
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
 # ==========================================
-# TAB 2: LIVE MARKET SCREENER
+# TAB 2: LIVE MARKET SCREENER (Bulletproof Filter)
 # ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
     
-    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS, ADANIENT, JSWSTEEL, ASIANPAINT"
+    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS, ADANIENT, JSWSTEEL, ASIANPAINT, ETERNAL, ADANIGREEN, CGPOWER"
     ticker_input = st.text_area("Enter NSE Tickers (comma separated):", value=default_tickers)
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
@@ -168,7 +168,6 @@ with tab2:
     with col_btn1:
         fetch_clicked = st.button("Fetch Live Data", type="primary")
     with col_btn2:
-        # Cache busting button
         if st.button("🔄 Force Refresh (Clear Cache)"):
             st.cache_data.clear()
             if 'live_df' in st.session_state:
@@ -182,25 +181,63 @@ with tab2:
     if 'live_df' in st.session_state and not st.session_state['live_df'].empty:
         df = st.session_state['live_df'].copy()
         
+        # 1. ABSOLUTE FORCE TO NUMERIC (Coerce turns any rogue strings into NaN)
+        df["TTM_PE"] = pd.to_numeric(df["TTM_PE"], errors='coerce')
+        df["ROE_Pct"] = pd.to_numeric(df["ROE_Pct"], errors='coerce')
+        df["Yearly_Profit_Growth_Pct"] = pd.to_numeric(df["Yearly_Profit_Growth_Pct"], errors='coerce')
+        
+        # Drop rows where P/E or ROE became NaN
+        df = df.dropna(subset=["TTM_PE", "ROE_Pct"])
+        
         # Collapsible Live Data Filters
         with st.expander("⚙️ Screen & Filter Live Data", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
-                min_pe, max_pe = st.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())), key="live_pe")
+                # Using the true min/max of the cleaned numeric column
+                min_pe, max_pe = st.slider(
+                    "P/E Ratio", 
+                    float(df["TTM_PE"].min()), 
+                    float(df["TTM_PE"].max()), 
+                    (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())), 
+                    key="live_pe"
+                )
             with col2:
-                min_roe, max_roe = st.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())), key="live_roe")
+                min_roe, max_roe = st.slider(
+                    "ROE (%)", 
+                    float(df["ROE_Pct"].min()), 
+                    float(df["ROE_Pct"].max()), 
+                    (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())), 
+                    key="live_roe"
+                )
             with col3:
                 growth_data = df["Yearly_Profit_Growth_Pct"].dropna()
                 if not growth_data.empty:
-                    min_growth, max_growth = st.slider("Yearly Profit Growth (%)", float(growth_data.min()), float(growth_data.max()), (float(growth_data.min()), float(growth_data.max())), key="live_growth")
+                    min_growth, max_growth = st.slider(
+                        "Yearly Profit Growth (%)", 
+                        float(growth_data.min()), 
+                        float(growth_data.max()), 
+                        (float(growth_data.min()), float(growth_data.max())), 
+                        key="live_growth"
+                    )
                 else:
                     min_growth, max_growth = -100.0, 100.0 
 
-        # Apply Filters 
-        filtered_df = df[
-            (df["TTM_PE"] >= min_pe) & (df["TTM_PE"] <= max_pe) &
-            (df["ROE_Pct"] >= min_roe) & (df["ROE_Pct"] <= max_roe) &
-            ((df["Yearly_Profit_Growth_Pct"] >= min_growth) & (df["Yearly_Profit_Growth_Pct"] <= max_growth) | df["Yearly_Profit_Growth_Pct"].isna())
+        # 2. STEP-BY-STEP FILTERING (This prevents logical operators from failing)
+        filtered_df = df.copy()
+        
+        # Filter PE
+        filtered_df = filtered_df[filtered_df["TTM_PE"] >= float(min_pe)]
+        filtered_df = filtered_df[filtered_df["TTM_PE"] <= float(max_pe)]
+        
+        # Filter ROE
+        filtered_df = filtered_df[filtered_df["ROE_Pct"] >= float(min_roe)]
+        filtered_df = filtered_df[filtered_df["ROE_Pct"] <= float(max_roe)]
+        
+        # Filter Growth (Allow NaNs to stay if they exist, or filter if numeric)
+        filtered_df = filtered_df[
+            ((filtered_df["Yearly_Profit_Growth_Pct"] >= float(min_growth)) & 
+             (filtered_df["Yearly_Profit_Growth_Pct"] <= float(max_growth))) | 
+             filtered_df["Yearly_Profit_Growth_Pct"].isna()
         ]
         
         if not filtered_df.empty:
@@ -219,11 +256,10 @@ with tab2:
                     [0.55, "#dc2626"], 
                     [1.0, "#dc2626"]   
                 ],
-                range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
+                range_color=[float(filtered_df["TTM_PE"].min()), float(filtered_df["TTM_PE"].max())],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
             )
             
-            # Formatting
             fig2.update_layout(
                 height=700, 
                 plot_bgcolor="white", 
@@ -244,7 +280,7 @@ with tab2:
             
             st.plotly_chart(fig2, use_container_width=True, theme=None)
             
-            # Collapsible Data Table
+            # Collapsible Data Table (Using absolute display values)
             with st.expander("📋 View Screened Data Table", expanded=True):
                 st.dataframe(
                     filtered_df.style.format({
