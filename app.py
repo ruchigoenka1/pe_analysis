@@ -139,32 +139,47 @@ with tab1:
 # ==========================================
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
+# ==========================================
+# TAB 2: LIVE MARKET SCREENER (Updated)
+# ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
-    st.markdown("Fetches real-time Market Cap, TTM P/E, and ROE. Filters out companies below your Market Cap threshold.")
     
-    # Input list of tickers
-    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, SUZLON, IDEA, TATAMOTORS, LICI"
+    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS"
     ticker_input = st.text_area("Enter NSE Tickers (comma separated):", value=default_tickers)
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
     if st.button("Fetch Live Data", type="primary"):
-        with st.spinner("Fetching data from Yahoo Finance..."):
+        with st.spinner("Calculating YoY Profit Growth and fetching data..."):
             ticker_list = [t.strip() for t in ticker_input.split(",")]
             live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
             
             if not live_df.empty:
-                st.success(f"Successfully pulled data for {len(live_df)} companies meeting the criteria.")
+                st.success(f"Successfully pulled data for {len(live_df)} companies.")
                 
-                # Dark theme plot for live data
+                # UPDATED GRAPH: Growth (X) vs ROE (Y), Color: PE, Size: Market Cap
                 fig2 = px.scatter(
-                    live_df, x="ROE_Pct", y="TTM_PE", size="Market_Cap_Cr", color="TTM_PE",
-                    hover_name="Ticker", color_continuous_scale=["#1e40af", "#ef4444"], 
-                    labels={"ROE_Pct": "Return on Equity (%)", "TTM_PE": "Trailing P/E Ratio"},
-                    title=f"Live ROE vs P/E Matrix (Market Cap > {min_mcap_input} Cr)"
+                    live_df, 
+                    x="Yearly_Profit_Growth_Pct", 
+                    y="ROE_Pct", 
+                    size="Market_Cap_Cr", 
+                    color="TTM_PE", # PE as heatmap color
+                    hover_name="Ticker", 
+                    color_continuous_scale=["#1e40af", "#ef4444"], # Blue to Red
+                    labels={
+                        "Yearly_Profit_Growth_Pct": "Yearly Profit Growth (%)", 
+                        "ROE_Pct": "Return on Equity (%)", 
+                        "TTM_PE": "TTM P/E"
+                    },
+                    title="Growth vs ROE: Valuation Heatmap"
                 )
+                
+                # Dark theme formatting & Height increase
                 fig2.update_layout(
-                    plot_bgcolor="#0f172a", paper_bgcolor="#0f172a", font=dict(color="#f8fafc"),
+                    height=700,
+                    plot_bgcolor="#0f172a", 
+                    paper_bgcolor="#0f172a", 
+                    font=dict(color="#f8fafc"),
                     xaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b"),
                     yaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b")
                 )
@@ -172,12 +187,13 @@ with tab2:
                 
                 st.plotly_chart(fig2, use_container_width=True)
                 
-                # Formatted DataFrame
+                # Display table
                 st.dataframe(
                     live_df.style.format({
                         "Market_Cap_Cr": "{:,.0f} Cr", 
                         "TTM_PE": "{:.2f}x", 
-                        "ROE_Pct": "{:.2f}%"
+                        "ROE_Pct": "{:.2f}%",
+                        "Yearly_Profit_Growth_Pct": "{:.2f}%"
                     }), 
                     use_container_width=True
                 )
