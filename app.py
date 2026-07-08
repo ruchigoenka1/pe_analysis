@@ -5,13 +5,12 @@ import yfinance as yf
 import plotly.express as px
 from sklearn.ensemble import RandomForestRegressor
 
-# Page Config: Dark mode professional layout
+# Page Config: Professional layout
 st.set_page_config(page_title="Advanced Indian Equity Screener & Valuation Model", layout="wide")
 st.title("Indian Equity Valuation Platform")
 
 # --- DATA FUNCTIONS ---
 
-# 1. Simulated Data (for Tab 1 Advanced Matrix)
 @st.cache_data
 def fetch_mock_data():
     nifty_tickers = [
@@ -35,8 +34,7 @@ def fetch_mock_data():
         })
     return pd.DataFrame(data)
 
-# 2. Live Data Fetcher (for Tab 2 Live Screener)
-@st.cache_data(show_spinner=True) # show_spinner=True gives you a built-in loading indicator
+@st.cache_data(show_spinner=True) 
 def pull_live_market_data(ticker_list, min_mcap_cr=1000):
     data = []
     min_mcap_absolute = min_mcap_cr * 10000000
@@ -71,7 +69,6 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
             
     return pd.DataFrame(data).dropna(subset=["TTM_PE", "ROE_Pct"])
 
-
 # --- TABS LAYOUT ---
 tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener"])
 
@@ -83,14 +80,15 @@ with tab1:
     
     df_mock = fetch_mock_data()
     
-    # Filters specific to Tab 1
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        min_hist_roe = st.slider("Min Historical ROE (%)", 0.0, 40.0, 15.0, key="t1_roe")
-    with col_b:
-        min_growth_5y = st.slider("Min 5Y Hist Growth (%)", 0.0, 30.0, 10.0, key="t1_growth")
-    with col_c:
-        max_ttm_pe = st.slider("Max TTM P/E", 10.0, 150.0, 100.0, key="t1_pe")
+    # Collapsible Filters
+    with st.expander("⚙️ Advanced Filters", expanded=True):
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            min_hist_roe = st.slider("Min Historical ROE (%)", 0.0, 40.0, 15.0, key="t1_roe")
+        with col_b:
+            min_growth_5y = st.slider("Min 5Y Hist Growth (%)", 0.0, 30.0, 10.0, key="t1_growth")
+        with col_c:
+            max_ttm_pe = st.slider("Max TTM P/E", 10.0, 150.0, 100.0, key="t1_pe")
 
     filtered_mock = df_mock[
         (df_mock["Historical_ROE"] >= min_hist_roe) &
@@ -101,83 +99,80 @@ with tab1:
     if not filtered_mock.empty:
         fig1 = px.scatter(
             filtered_mock, x="Growth_5Y", y="Forward_ROE", size="Market_Cap_Cr", color="Forward_PE",
-            hover_name="Ticker", color_continuous_scale=["#1e40af", "#ef4444"], 
+            hover_name="Ticker", 
+            color_continuous_scale=["#0284c7", "#991b1b"], 
             title="Quality vs Valuation Matrix"
         )
         fig1.update_layout(
-            plot_bgcolor="#0f172a", paper_bgcolor="#0f172a", font=dict(color="#f8fafc"),
-            xaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b"),
-            yaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b")
+            plot_bgcolor="white", paper_bgcolor="white", font=dict(color="black"),
+            xaxis=dict(showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#94a3b8"),
+            yaxis=dict(showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#94a3b8")
         )
-        fig1.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
+        fig1.update_traces(marker=dict(line=dict(width=1.5, color="#0f172a")))
         st.plotly_chart(fig1, use_container_width=True)
     else:
         st.warning("No stocks match the criteria.")
 
     st.markdown("---")
-    st.subheader("Valuation Engine: Forward P/E Predictor")
     
-    if len(filtered_mock) > 5:
-        features = ["Historical_ROE", "Growth_5Y", "Leverage_DE"]
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
-        model.fit(filtered_mock[features], filtered_mock["Forward_PE"])
-        
-        st.markdown("**Test a Hypothetical Company Profile:**")
-        mc1, mc2, mc3 = st.columns(3)
-        test_hist_roe = mc1.number_input("Historical ROE (%)", value=20.0)
-        test_growth = mc2.number_input("5Y Growth (%)", value=15.0)
-        test_lev = mc3.number_input("Leverage (D/E)", value=0.5)
+    # Collapsible ML Engine
+    with st.expander("🤖 Valuation Engine: Forward P/E Predictor", expanded=False):
+        if len(filtered_mock) > 5:
+            features = ["Historical_ROE", "Growth_5Y", "Leverage_DE"]
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
+            model.fit(filtered_mock[features], filtered_mock["Forward_PE"])
             
-        pred = model.predict([[test_hist_roe, test_growth, test_lev]])
-        st.metric("Predicted Fair Forward P/E", f"{pred[0]:.2f}x")
+            st.markdown("**Test a Hypothetical Company Profile:**")
+            mc1, mc2, mc3 = st.columns(3)
+            test_hist_roe = mc1.number_input("Historical ROE (%)", value=20.0)
+            test_growth = mc2.number_input("5Y Growth (%)", value=15.0)
+            test_lev = mc3.number_input("Leverage (D/E)", value=0.5)
+                
+            pred = model.predict([[test_hist_roe, test_growth, test_lev]])
+            st.metric("Predicted Fair Forward P/E", f"{pred[0]:.2f}x")
+        else:
+            st.info("Not enough data points to train the model. Broaden your filter criteria.")
 
 # ==========================================
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
-# ==========================================
-# TAB 2: LIVE MARKET SCREENER
-# ==========================================
-# ==========================================
-# TAB 2: LIVE MARKET SCREENER (Final Version)
-# ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
     
-    # 1. Inputs
     default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS, ADANIENT, JSWSTEEL, ASIANPAINT"
     ticker_input = st.text_area("Enter NSE Tickers (comma separated):", value=default_tickers)
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
     if st.button("Fetch Live Data", type="primary"):
         ticker_list = [t.strip() for t in ticker_input.split(",")]
-        # Note: Ensure pull_live_market_data is defined at the top of your script
         st.session_state['live_df'] = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
     
-    # 2. Filter & Display Logic
     if 'live_df' in st.session_state and not st.session_state['live_df'].empty:
         df = st.session_state['live_df']
         
-        st.sidebar.markdown("### Data Filters")
-        
-        # Sliders
-        min_pe, max_pe = st.sidebar.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())))
-        min_roe, max_roe = st.sidebar.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())))
-        
-        growth_data = df["Yearly_Profit_Growth_Pct"].dropna()
-        if not growth_data.empty:
-            min_growth, max_growth = st.sidebar.slider("Yearly Profit Growth (%)", float(growth_data.min()), float(growth_data.max()), (float(growth_data.min()), float(growth_data.max())))
-        else:
-            min_growth, max_growth = -100.0, 100.0 
+        # Collapsible Live Data Filters
+        with st.expander("⚙️ Screen & Filter Live Data", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                min_pe, max_pe = st.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())))
+            with col2:
+                min_roe, max_roe = st.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())))
+            with col3:
+                growth_data = df["Yearly_Profit_Growth_Pct"].dropna()
+                if not growth_data.empty:
+                    min_growth, max_growth = st.slider("Yearly Profit Growth (%)", float(growth_data.min()), float(growth_data.max()), (float(growth_data.min()), float(growth_data.max())))
+                else:
+                    min_growth, max_growth = -100.0, 100.0 
 
-        # Apply Filters
+        # Apply Filters (Executes immediately upon slider movement)
         filtered_df = df[
             (df["TTM_PE"].between(min_pe, max_pe)) &
             (df["ROE_Pct"].between(min_roe, max_roe)) &
             (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
         ]
         
-        # 3. Reactive Heatmap with Sharp 3-Color Split
         if not filtered_df.empty:
+            # High-Contrast 3-Color Scale Chart
             fig2 = px.scatter(
                 filtered_df, 
                 x="Yearly_Profit_Growth_Pct", 
@@ -185,36 +180,37 @@ with tab2:
                 size="Market_Cap_Cr", 
                 color="TTM_PE", 
                 hover_name="Ticker",
-                # Sharp 3-Color Scale: Blue -> Grey -> Red
                 color_continuous_scale=[
-                    [0.0, "#0ea5e9"],  # Vibrant Blue
-                    [0.45, "#0ea5e9"], # Blue anchor
-                    [0.5, "#475569"],  # Neutral Grey
-                    [0.55, "#dc2626"], # Red anchor
-                    [1.0, "#dc2626"]   # Vibrant Red
+                    [0.0, "#0284c7"],  # Vibrant Blue (Cool/Low PE)
+                    [0.45, "#0284c7"], 
+                    [0.5, "#94a3b8"],  # Neutral Grey Midpoint
+                    [0.55, "#dc2626"], 
+                    [1.0, "#dc2626"]   # Sharp Red (Hot/High PE)
                 ],
                 range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
             )
             fig2.update_layout(
                 height=700, 
-                plot_bgcolor="#0f172a", 
-                paper_bgcolor="#0f172a", 
-                font=dict(color="#f8fafc")
+                plot_bgcolor="white", 
+                paper_bgcolor="white", 
+                font=dict(color="black"),
+                xaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
+                yaxis=dict(showgrid=True, gridcolor="#e2e8f0")
             )
-            fig2.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
+            fig2.update_traces(marker=dict(line=dict(width=1.5, color="#0f172a")))
             st.plotly_chart(fig2, use_container_width=True)
             
-            # 4. Filtered Data Table
-            st.markdown("### Screened Data Table")
-            st.dataframe(
-                filtered_df.style.format({
-                    "Market_Cap_Cr": "{:,.0f} Cr", 
-                    "TTM_PE": "{:.2f}x", 
-                    "ROE_Pct": "{:.2f}%",
-                    "Yearly_Profit_Growth_Pct": "{:.2f}%"
-                }), 
-                use_container_width=True
-            )
+            # Collapsible Data Table (Showing absolute values)
+            with st.expander("📋 View Screened Data Table", expanded=True):
+                st.dataframe(
+                    filtered_df.style.format({
+                        "Market_Cap_Cr": "{:,.0f} Cr", 
+                        "TTM_PE": "{:.2f}x", 
+                        "ROE_Pct": "{:.2f}%",
+                        "Yearly_Profit_Growth_Pct": "{:.2f}%"
+                    }), 
+                    use_container_width=True
+                )
         else:
             st.warning("No stocks match the selected filter criteria.")
