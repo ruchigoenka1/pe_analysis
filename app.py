@@ -39,9 +39,13 @@ def fetch_mock_data():
 @st.cache_data(show_spinner=False)
 def pull_live_market_data(ticker_list, min_mcap_cr=1000):
     data = []
-    min_mcap_absolute = min_mcap_cr * 10000000 
+    min_mcap_absolute = min_mcap_cr * 10000000
     
-    for ticker in ticker_list:
+    # Initialize the progress bar
+    progress_bar = st.progress(0, text="Fetching data from Yahoo Finance...")
+    total_tickers = len(ticker_list)
+    
+    for i, ticker in enumerate(ticker_list):
         clean_ticker = ticker.strip().upper()
         if not clean_ticker: continue
         
@@ -51,18 +55,12 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
             mcap = info.get('marketCap', 0)
             
             if mcap >= min_mcap_absolute:
-                # Fetch annual income statement
                 financials = stock.financials
-                if financials is not None and not financials.empty:
-                    # Net Income is usually the first row in annual financials
+                yearly_growth = None
+                if financials is not None and not financials.empty and 'Net Income' in financials.index:
                     net_income = financials.loc['Net Income']
-                    # Calculate YoY Growth: (Current Year - Previous Year) / Previous Year
                     if len(net_income) >= 2:
                         yearly_growth = ((net_income.iloc[0] - net_income.iloc[1]) / net_income.iloc[1]) * 100
-                    else:
-                        yearly_growth = None
-                else:
-                    yearly_growth = None
                 
                 roe = info.get('returnOnEquity', None)
                 data.append({
@@ -74,7 +72,11 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
                 })
         except Exception:
             continue
-            
+        
+        # Update progress bar
+        progress_bar.progress((i + 1) / total_tickers, text=f"Processing {clean_ticker}... ({i+1}/{total_tickers})")
+    
+    progress_bar.empty() # Remove the bar when finished
     return pd.DataFrame(data).dropna(subset=["TTM_PE", "ROE_Pct"])
 
 # --- TABS LAYOUT ---
@@ -145,57 +147,55 @@ with tab1:
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
     
-    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS"
+    # 1. Input Tickers and Fetch
+    default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS, ADANIENT, JSWSTEEL, ASIANPAINT"
     ticker_input = st.text_area("Enter NSE Tickers (comma separated):", value=default_tickers)
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
     if st.button("Fetch Live Data", type="primary"):
-        with st.spinner("Calculating YoY Profit Growth and fetching data..."):
-            ticker_list = [t.strip() for t in ticker_input.split(",")]
-            live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
-            
-            if not live_df.empty:
-                st.success(f"Successfully pulled data for {len(live_df)} companies.")
-                
-                # UPDATED GRAPH: Growth (X) vs ROE (Y), Color: PE, Size: Market Cap
-                fig2 = px.scatter(
-                    live_df, 
-                    x="Yearly_Profit_Growth_Pct", 
-                    y="ROE_Pct", 
-                    size="Market_Cap_Cr", 
-                    color="TTM_PE", # PE as heatmap color
-                    hover_name="Ticker", 
-                    color_continuous_scale=["#1e40af", "#ef4444"], # Blue to Red
-                    labels={
-                        "Yearly_Profit_Growth_Pct": "Yearly Profit Growth (%)", 
-                        "ROE_Pct": "Return on Equity (%)", 
-                        "TTM_PE": "TTM P/E"
-                    },
-                    title="Growth vs ROE: Valuation Heatmap"
-                )
-                
-                # Dark theme formatting & Height increase
-                fig2.update_layout(
-                    height=700,
-                    plot_bgcolor="#0f172a", 
-                    paper_bgcolor="#0f172a", 
-                    font=dict(color="#f8fafc"),
-                    xaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b"),
-                    yaxis=dict(showgrid=True, gridcolor="#334155", zerolinecolor="#64748b")
-                )
-                fig2.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
-                
-                st.plotly_chart(fig2, use_container_width=True)
-                
-                # Display table
-                st.dataframe(
-                    live_df.style.format({
-                        "Market_Cap_Cr": "{:,.0f} Cr", 
-                        "TTM_PE": "{:.2f}x", 
-                        "ROE_Pct": "{:.2f}%",
-                        "Yearly_Profit_Growth_Pct": "{:.2f}%"
-                    }), 
-                    use_container_width=True
-                )
-            else:
-                st.error("No companies found or none met the >1000 Cr Market Cap threshold.")
+        # ... (keep your existing pull_live_market_data call here) ...
+        live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
+        st.session_state['live_df'] = live_df
+
+    # 2. Add Filters only if data exists
+    if 'live_df' in st.session_state and not st.session_state['live_df'].empty:
+        df = st.session_state['live_df']
+        
+        st.sidebar.markdown("### Data Filters")
+        
+        # P/E Filter
+        min_pe, max_pe = st.sidebar.slider(
+            "Filter by P/E Ratio", 
+            float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), 
+            (float(df["TTM_PE"].min()), float(df["TTM_PE"].max()))
+        )
+        
+        # ROE Filter
+        min_roe, max_roe = st.sidebar.slider(
+            "Filter by ROE (%)", 
+            float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), 
+            (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()))
+        )
+        
+        # Growth Filter (Handling potential None values)
+        clean_growth = df["Yearly_Profit_Growth_Pct"].dropna()
+        min_growth, max_growth = st.sidebar.slider(
+            "Filter by Profit Growth (%)", 
+            float(clean_growth.min()), float(clean_growth.max()), 
+            (float(clean_growth.min()), float(clean_growth.max()))
+        )
+
+        # 3. Apply the filters
+        filtered_df = df[
+            (df["TTM_PE"].between(min_pe, max_pe)) &
+            (df["ROE_Pct"].between(min_roe, max_roe)) &
+            (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
+        ]
+
+        # 4. Plot the filtered data
+        fig2 = px.scatter(
+            filtered_df, 
+            x="Yearly_Profit_Growth_Pct", y="ROE_Pct", size="Market_Cap_Cr", color="TTM_PE",
+            # ... (rest of your plot code remains the same) ...
+        )
+        st.plotly_chart(fig2, use_container_width=True)
