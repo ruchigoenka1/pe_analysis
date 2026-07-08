@@ -68,7 +68,16 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
         except Exception:
             continue
             
-    return pd.DataFrame(data).dropna(subset=["TTM_PE", "ROE_Pct"])
+    df = pd.DataFrame(data)
+    
+    # CRITICAL FIX: Clean data before it hits the cache
+    if not df.empty:
+        df["TTM_PE"] = pd.to_numeric(df["TTM_PE"], errors='coerce')
+        df["ROE_Pct"] = pd.to_numeric(df["ROE_Pct"], errors='coerce')
+        df["Yearly_Profit_Growth_Pct"] = pd.to_numeric(df["Yearly_Profit_Growth_Pct"], errors='coerce')
+        df = df.dropna(subset=["TTM_PE", "ROE_Pct"])
+        
+    return df
 
 # --- TABS LAYOUT ---
 tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener"])
@@ -144,6 +153,9 @@ with tab1:
 # ==========================================
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
+# ==========================================
+# TAB 2: LIVE MARKET SCREENER
+# ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
     
@@ -151,26 +163,29 @@ with tab2:
     ticker_input = st.text_area("Enter NSE Tickers (comma separated):", value=default_tickers)
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
-    if st.button("Fetch Live Data", type="primary"):
+    # UI Layout for Buttons
+    col_btn1, col_btn2 = st.columns([1, 4])
+    with col_btn1:
+        fetch_clicked = st.button("Fetch Live Data", type="primary")
+    with col_btn2:
+        # Cache busting button
+        if st.button("🔄 Force Refresh (Clear Cache)"):
+            st.cache_data.clear()
+            if 'live_df' in st.session_state:
+                del st.session_state['live_df']
+            st.rerun()
+            
+    if fetch_clicked:
         ticker_list = [t.strip() for t in ticker_input.split(",")]
         st.session_state['live_df'] = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
     
     if 'live_df' in st.session_state and not st.session_state['live_df'].empty:
-        df = st.session_state['live_df'].copy() # Use a copy to prevent state mutation warnings
-        
-        # --- CRITICAL FIX: Force strict numeric types to prevent silent filtering failures ---
-        df["TTM_PE"] = pd.to_numeric(df["TTM_PE"], errors='coerce')
-        df["ROE_Pct"] = pd.to_numeric(df["ROE_Pct"], errors='coerce')
-        df["Yearly_Profit_Growth_Pct"] = pd.to_numeric(df["Yearly_Profit_Growth_Pct"], errors='coerce')
-        
-        # Drop any rows that couldn't be converted to numbers
-        df = df.dropna(subset=["TTM_PE", "ROE_Pct"])
+        df = st.session_state['live_df'].copy()
         
         # Collapsible Live Data Filters
         with st.expander("⚙️ Screen & Filter Live Data", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
-                # Added explicit keys to lock Streamlit state
                 min_pe, max_pe = st.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())), key="live_pe")
             with col2:
                 min_roe, max_roe = st.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())), key="live_roe")
@@ -181,11 +196,11 @@ with tab2:
                 else:
                     min_growth, max_growth = -100.0, 100.0 
 
-        # Apply Filters (Explicit float comparison)
+        # Apply Filters 
         filtered_df = df[
-            (df["TTM_PE"] >= float(min_pe)) & (df["TTM_PE"] <= float(max_pe)) &
-            (df["ROE_Pct"] >= float(min_roe)) & (df["ROE_Pct"] <= float(max_roe)) &
-            ((df["Yearly_Profit_Growth_Pct"] >= float(min_growth)) & (df["Yearly_Profit_Growth_Pct"] <= float(max_growth)) | df["Yearly_Profit_Growth_Pct"].isna())
+            (df["TTM_PE"] >= min_pe) & (df["TTM_PE"] <= max_pe) &
+            (df["ROE_Pct"] >= min_roe) & (df["ROE_Pct"] <= max_roe) &
+            ((df["Yearly_Profit_Growth_Pct"] >= min_growth) & (df["Yearly_Profit_Growth_Pct"] <= max_growth) | df["Yearly_Profit_Growth_Pct"].isna())
         ]
         
         if not filtered_df.empty:
@@ -198,17 +213,17 @@ with tab2:
                 color="TTM_PE", 
                 hover_name="Ticker",
                 color_continuous_scale=[
-                    [0.0, "#0284c7"],  # Vibrant Blue
+                    [0.0, "#0284c7"],  
                     [0.45, "#0284c7"], 
-                    [0.5, "#94a3b8"],  # Neutral Grey Midpoint
+                    [0.5, "#94a3b8"],  
                     [0.55, "#dc2626"], 
-                    [1.0, "#dc2626"]   # Sharp Red
+                    [1.0, "#dc2626"]   
                 ],
                 range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
             )
             
-            # Minimalist white background with blue outlines and axis fonts for max visibility
+            # Formatting
             fig2.update_layout(
                 height=700, 
                 plot_bgcolor="white", 
@@ -227,10 +242,9 @@ with tab2:
             )
             fig2.update_traces(marker=dict(line=dict(width=1.5, color="#1e3a8a")))
             
-            # Override Streamlit's theme to force the custom colors to render
             st.plotly_chart(fig2, use_container_width=True, theme=None)
             
-            # Collapsible Data Table (Showing absolute values)
+            # Collapsible Data Table
             with st.expander("📋 View Screened Data Table", expanded=True):
                 st.dataframe(
                     filtered_df.style.format({
