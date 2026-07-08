@@ -137,6 +137,9 @@ with tab1:
 # ==========================================
 # TAB 2: LIVE MARKET SCREENER
 # ==========================================
+# ==========================================
+# TAB 2: LIVE MARKET SCREENER (Final Version)
+# ==========================================
 with tab2:
     st.markdown("### Live Market Data Pull (Yahoo Finance)")
     
@@ -147,7 +150,7 @@ with tab2:
     
     if st.button("Fetch Live Data", type="primary"):
         ticker_list = [t.strip() for t in ticker_input.split(",")]
-        # Fetch data
+        # Note: Ensure pull_live_market_data is defined at the top of your script
         st.session_state['live_df'] = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
     
     # 2. Filter & Display Logic
@@ -173,7 +176,7 @@ with tab2:
             (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
         ]
         
-        # 3. Reactive Heatmap with SHARPER colors
+        # 3. Reactive Heatmap with Sharp 3-Color Split
         if not filtered_df.empty:
             fig2 = px.scatter(
                 filtered_df, 
@@ -182,11 +185,13 @@ with tab2:
                 size="Market_Cap_Cr", 
                 color="TTM_PE", 
                 hover_name="Ticker",
-                # Sharper Diverging Scale: Deep Blue -> Neutral Grey -> Vivid Red
+                # Sharp 3-Color Scale: Blue -> Grey -> Red
                 color_continuous_scale=[
-                    [0.0, "#0ea5e9"],   # Deep Sky Blue (Low PE)
-                    [0.5, "#475569"],   # Neutral Slate (Mid PE)
-                    [1.0, "#dc2626"]    # Vivid Red (High PE)
+                    [0.0, "#0ea5e9"],  # Vibrant Blue
+                    [0.45, "#0ea5e9"], # Blue anchor
+                    [0.5, "#475569"],  # Neutral Grey
+                    [0.55, "#dc2626"], # Red anchor
+                    [1.0, "#dc2626"]   # Vibrant Red
                 ],
                 range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
@@ -197,7 +202,6 @@ with tab2:
                 paper_bgcolor="#0f172a", 
                 font=dict(color="#f8fafc")
             )
-            # Add white border to bubbles for better contrast
             fig2.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
             st.plotly_chart(fig2, use_container_width=True)
             
