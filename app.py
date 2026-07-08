@@ -153,7 +153,8 @@ with tab2:
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
     if st.button("Fetch Live Data", type="primary"):
-
+        # 1. Define ticker_list HERE, inside the button scope
+        ticker_list = [t.strip() for t in ticker_input.split(",")]
         # Before calling the function, initialize the progress bar
         progress_bar = st.progress(0, text="Fetching data from Yahoo Finance...")
 
