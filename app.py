@@ -158,14 +158,31 @@ with tab2:
         df = st.session_state['live_df']
         
         # --- FILTERS ---
+# --- FILTERS ---
         st.sidebar.markdown("### Data Filters")
+        
+        # P/E Filter
         min_pe, max_pe = st.sidebar.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())))
+        
+        # ROE Filter
         min_roe, max_roe = st.sidebar.slider("ROE (%)", float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max()), (float(df["ROE_Pct"].min()), float(df["ROE_Pct"].max())))
         
-        # Apply filters
+        # Growth Filter: Safely handle NaN values by dropping them for slider calculation
+        growth_data = df["Yearly_Profit_Growth_Pct"].dropna()
+        if not growth_data.empty:
+            min_growth, max_growth = st.sidebar.slider(
+                "Yearly Profit Growth (%)", 
+                float(growth_data.min()), float(growth_data.max()), 
+                (float(growth_data.min()), float(growth_data.max()))
+            )
+        else:
+            min_growth, max_growth = -100.0, 100.0 # Fallback if no growth data exists
+        
+        # Apply all filters
         filtered_df = df[
             (df["TTM_PE"].between(min_pe, max_pe)) &
-            (df["ROE_Pct"].between(min_roe, max_roe))
+            (df["ROE_Pct"].between(min_roe, max_roe)) &
+            (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
         ]
         
         # --- GRAPH ---
