@@ -37,12 +37,11 @@ def fetch_mock_data():
 
 # 2. Live Data Fetcher (for Tab 2 Live Screener)
 @st.cache_data(show_spinner=False)
-def pull_live_market_data(ticker_list, min_mcap_cr=1000):
+@st.cache_data(show_spinner=False)
+def pull_live_market_data(ticker_list, min_mcap_cr=1000, _progress_bar=None): # Note the underscore
     data = []
     min_mcap_absolute = min_mcap_cr * 10000000
     
-    # Initialize the progress bar
-    progress_bar = st.progress(0, text="Fetching data from Yahoo Finance...")
     total_tickers = len(ticker_list)
     
     for i, ticker in enumerate(ticker_list):
@@ -73,12 +72,14 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
         except Exception:
             continue
         
-        # Update progress bar
-        progress_bar.progress((i + 1) / total_tickers, text=f"Processing {clean_ticker}... ({i+1}/{total_tickers})")
+        # Check if progress_bar was provided before trying to update
+        if _progress_bar:
+            _progress_bar.progress((i + 1) / total_tickers, text=f"Processing {clean_ticker}... ({i+1}/{total_tickers})")
     
-    progress_bar.empty() # Remove the bar when finished
+    if _progress_bar:
+        _progress_bar.empty()
+        
     return pd.DataFrame(data).dropna(subset=["TTM_PE", "ROE_Pct"])
-
 # --- TABS LAYOUT ---
 tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener"])
 
