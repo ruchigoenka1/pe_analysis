@@ -153,8 +153,14 @@ with tab2:
     min_mcap_input = st.number_input("Minimum Market Cap (in Crores):", value=1000, step=500)
     
     if st.button("Fetch Live Data", type="primary"):
+
+        # Before calling the function, initialize the progress bar
+        progress_bar = st.progress(0, text="Fetching data from Yahoo Finance...")
+
+        # Now call the function with the progress_bar argument
+        live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input, progress_bar=progress_bar)
         # ... (keep your existing pull_live_market_data call here) ...
-        live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
+        # live_df = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
         st.session_state['live_df'] = live_df
 
     # 2. Add Filters only if data exists
