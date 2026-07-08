@@ -37,42 +37,31 @@ def fetch_mock_data():
 
 # 2. Live Data Fetcher (for Tab 2 Live Screener)
 @st.cache_data(show_spinner=False)
-@st.cache_data(show_spinner=False)
-def pull_live_market_data(ticker_list, min_mcap_cr=1000, _progress_bar=None): # Note the underscore
+def pull_live_market_data(ticker_list, min_mcap_cr=1000, _progress_bar=None): 
     data = []
     min_mcap_absolute = min_mcap_cr * 10000000
     
-    total_tickers = len(ticker_list)
+    # Check if the progress bar was provided before using it
+    if _progress_bar:
+        total_tickers = len(ticker_list)
     
     for i, ticker in enumerate(ticker_list):
         clean_ticker = ticker.strip().upper()
         if not clean_ticker: continue
         
         try:
+            # Your data fetching logic
             stock = yf.Ticker(f"{clean_ticker}.NS")
             info = stock.info
             mcap = info.get('marketCap', 0)
             
             if mcap >= min_mcap_absolute:
-                financials = stock.financials
-                yearly_growth = None
-                if financials is not None and not financials.empty and 'Net Income' in financials.index:
-                    net_income = financials.loc['Net Income']
-                    if len(net_income) >= 2:
-                        yearly_growth = ((net_income.iloc[0] - net_income.iloc[1]) / net_income.iloc[1]) * 100
-                
-                roe = info.get('returnOnEquity', None)
-                data.append({
-                    "Ticker": clean_ticker,
-                    "Market_Cap_Cr": round(mcap / 10000000, 2),
-                    "TTM_PE": info.get('trailingPE', None),
-                    "ROE_Pct": round(roe * 100, 2) if roe else None,
-                    "Yearly_Profit_Growth_Pct": round(yearly_growth, 2) if yearly_growth is not None else None
-                })
+                # ... (your income statement growth calculation logic) ...
+                data.append({...})
         except Exception:
             continue
         
-        # Check if progress_bar was provided before trying to update
+        # Update progress bar using the underscore version
         if _progress_bar:
             _progress_bar.progress((i + 1) / total_tickers, text=f"Processing {clean_ticker}... ({i+1}/{total_tickers})")
     
