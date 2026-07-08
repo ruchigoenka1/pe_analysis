@@ -34,7 +34,8 @@ def fetch_mock_data():
         })
     return pd.DataFrame(data)
 
-@st.cache_data(show_spinner=True) 
+# FIX 1: Custom clean text for the loading spinner
+@st.cache_data(show_spinner="Fetching live market data from Yahoo Finance...") 
 def pull_live_market_data(ticker_list, min_mcap_cr=1000):
     data = []
     min_mcap_absolute = min_mcap_cr * 10000000
@@ -90,6 +91,7 @@ with tab1:
         with col_c:
             max_ttm_pe = st.slider("Max TTM P/E", 10.0, 150.0, 100.0, key="t1_pe")
 
+    # Explicit condition filtering
     filtered_mock = df_mock[
         (df_mock["Historical_ROE"] >= min_hist_roe) &
         (df_mock["Growth_5Y"] >= min_growth_5y) &
@@ -103,13 +105,16 @@ with tab1:
             color_continuous_scale=["#0284c7", "#991b1b"], 
             title="Quality vs Valuation Matrix"
         )
+        # Minimalist white background with crisp blue formatting
         fig1.update_layout(
-            plot_bgcolor="white", paper_bgcolor="white", font=dict(color="black"),
-            xaxis=dict(showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#94a3b8"),
-            yaxis=dict(showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#94a3b8")
+            plot_bgcolor="white", paper_bgcolor="white", font=dict(color="#1e3a8a"),
+            xaxis=dict(showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#cbd5e1", tickfont=dict(color="#1e3a8a", size=13)),
+            yaxis=dict(showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#cbd5e1", tickfont=dict(color="#1e3a8a", size=13))
         )
-        fig1.update_traces(marker=dict(line=dict(width=1.5, color="#0f172a")))
-        st.plotly_chart(fig1, use_container_width=True)
+        fig1.update_traces(marker=dict(line=dict(width=1.5, color="#1e3a8a")))
+        
+        # Override Streamlit's theme to maintain absolute color visibility
+        st.plotly_chart(fig1, use_container_width=True, theme=None)
     else:
         st.warning("No stocks match the criteria.")
 
@@ -164,11 +169,11 @@ with tab2:
                 else:
                     min_growth, max_growth = -100.0, 100.0 
 
-        # Apply Filters (Executes immediately upon slider movement)
+        # FIX 2: Apply Filters using explicit >= and <= operators
         filtered_df = df[
-            (df["TTM_PE"].between(min_pe, max_pe)) &
-            (df["ROE_Pct"].between(min_roe, max_roe)) &
-            (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
+            (df["TTM_PE"] >= min_pe) & (df["TTM_PE"] <= max_pe) &
+            (df["ROE_Pct"] >= min_roe) & (df["ROE_Pct"] <= max_roe) &
+            (df["Yearly_Profit_Growth_Pct"] >= min_growth) & (df["Yearly_Profit_Growth_Pct"] <= max_growth)
         ]
         
         if not filtered_df.empty:
@@ -181,25 +186,37 @@ with tab2:
                 color="TTM_PE", 
                 hover_name="Ticker",
                 color_continuous_scale=[
-                    [0.0, "#0284c7"],  # Vibrant Blue (Cool/Low PE)
+                    [0.0, "#0284c7"],  # Vibrant Blue
                     [0.45, "#0284c7"], 
                     [0.5, "#94a3b8"],  # Neutral Grey Midpoint
                     [0.55, "#dc2626"], 
-                    [1.0, "#dc2626"]   # Sharp Red (Hot/High PE)
+                    [1.0, "#dc2626"]   # Sharp Red
                 ],
                 range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
             )
+            
+            # FIX 3: Minimalist white background with blue outlines and axis fonts for max visibility
             fig2.update_layout(
                 height=700, 
                 plot_bgcolor="white", 
                 paper_bgcolor="white", 
-                font=dict(color="black"),
-                xaxis=dict(showgrid=True, gridcolor="#e2e8f0"),
-                yaxis=dict(showgrid=True, gridcolor="#e2e8f0")
+                font=dict(color="#1e3a8a"),
+                xaxis=dict(
+                    showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#cbd5e1",
+                    tickfont=dict(color="#1e3a8a", size=13),
+                    title_font=dict(color="#1e3a8a", size=15)
+                ),
+                yaxis=dict(
+                    showgrid=True, gridcolor="#e2e8f0", zerolinecolor="#cbd5e1",
+                    tickfont=dict(color="#1e3a8a", size=13),
+                    title_font=dict(color="#1e3a8a", size=15)
+                )
             )
-            fig2.update_traces(marker=dict(line=dict(width=1.5, color="#0f172a")))
-            st.plotly_chart(fig2, use_container_width=True)
+            fig2.update_traces(marker=dict(line=dict(width=1.5, color="#1e3a8a")))
+            
+            # Override Streamlit's theme to force the custom colors to render
+            st.plotly_chart(fig2, use_container_width=True, theme=None)
             
             # Collapsible Data Table (Showing absolute values)
             with st.expander("📋 View Screened Data Table", expanded=True):
