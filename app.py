@@ -147,7 +147,7 @@ with tab2:
     
     if st.button("Fetch Live Data", type="primary"):
         ticker_list = [t.strip() for t in ticker_input.split(",")]
-        # Note: Ensure pull_live_market_data is defined at the top of your script
+        # Fetch data
         st.session_state['live_df'] = pull_live_market_data(ticker_list, min_mcap_cr=min_mcap_input)
     
     # 2. Filter & Display Logic
@@ -173,7 +173,7 @@ with tab2:
             (df["Yearly_Profit_Growth_Pct"].between(min_growth, max_growth))
         ]
         
-        # 3. Reactive Heatmap (Light Blue to Deep Red)
+        # 3. Reactive Heatmap with SHARPER colors
         if not filtered_df.empty:
             fig2 = px.scatter(
                 filtered_df, 
@@ -182,8 +182,12 @@ with tab2:
                 size="Market_Cap_Cr", 
                 color="TTM_PE", 
                 hover_name="Ticker",
-                # Heatmap: Light blue (#bae6fd) -> Mid-red (#f87171) -> Deep red (#991b1b)
-                color_continuous_scale=["#bae6fd", "#f87171", "#991b1b"], 
+                # Sharper Diverging Scale: Deep Blue -> Neutral Grey -> Vivid Red
+                color_continuous_scale=[
+                    [0.0, "#0ea5e9"],   # Deep Sky Blue (Low PE)
+                    [0.5, "#475569"],   # Neutral Slate (Mid PE)
+                    [1.0, "#dc2626"]    # Vivid Red (High PE)
+                ],
                 range_color=[filtered_df["TTM_PE"].min(), filtered_df["TTM_PE"].max()],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
             )
@@ -193,7 +197,8 @@ with tab2:
                 paper_bgcolor="#0f172a", 
                 font=dict(color="#f8fafc")
             )
-            fig2.update_traces(marker=dict(line=dict(width=1, color="#ffffff")))
+            # Add white border to bubbles for better contrast
+            fig2.update_traces(marker=dict(line=dict(width=1.5, color="#ffffff")))
             st.plotly_chart(fig2, use_container_width=True)
             
             # 4. Filtered Data Table
