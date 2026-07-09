@@ -104,7 +104,7 @@ def pull_live_market_data(ticker_list, min_mcap_cr=1000):
 # ==========================================
 # TABS LAYOUT
 # ==========================================
-tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener & Value Creation"])
+tab1, tab2 = st.tabs(["📊 Valuation Matrix & ML Engine", "⚡ Live Market Screener & Deep Dive"])
 
 # ==========================================
 # TAB 1: ADVANCED VALUATION & ML
@@ -143,7 +143,7 @@ with tab1:
             st.metric("Predicted Fair Forward P/E", f"{pred[0]:.2f}x")
 
 # ==========================================
-# TAB 2: LIVE MARKET SCREENER
+# TAB 2: LIVE MARKET SCREENER & DEEP DIVE
 # ==========================================
 with tab2:
     default_tickers = "ITC, TCS, RELIANCE, INFY, HDFCBANK, ZOMATO, TATAMOTORS, ADANIENT, JSWSTEEL, ASIANPAINT"
@@ -164,12 +164,11 @@ with tab2:
     if 'live_df' in st.session_state and not st.session_state['live_df'].empty:
         df = st.session_state['live_df'].copy()
         
-        # Absolute Force to Numeric
+        # Force Numeric
         num_cols = ["TTM_PE", "ROE_Pct", "Yearly_Profit_Growth_Pct", "EBIT_Growth_Pct", "EV_EBITDA", "Beta", "Unlevered_Beta"]
         for col in num_cols: df[col] = pd.to_numeric(df[col], errors='coerce')
         df = df.dropna(subset=["TTM_PE", "ROE_Pct"])
 
-        # --- MACRO ASSUMPTIONS ---
         with st.expander("⚖️ Macro Assumptions & Cost of Capital", expanded=False):
             c1, c2, c3, c4 = st.columns(4)
             risk_free_rate = c1.number_input("Risk-Free Rate (%)", value=7.0, step=0.1)
@@ -177,7 +176,6 @@ with tab2:
             cost_of_debt = c3.number_input("Pre-Tax Cost of Debt (%)", value=8.5, step=0.1)
             tax_rate = c4.number_input("Corporate Tax Rate (%)", value=25.0, step=1.0) / 100
 
-        # --- LIVE DATA FILTERS ---
         with st.expander("⚙️ Screen & Filter Live Data", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1: min_pe, max_pe = st.slider("P/E Ratio", float(df["TTM_PE"].min()), float(df["TTM_PE"].max()), (float(df["TTM_PE"].min()), float(df["TTM_PE"].max())), key="live_pe")
@@ -189,7 +187,6 @@ with tab2:
                 else:
                     min_growth, max_growth = -100.0, 100.0 
 
-        # Apply Filters
         filtered_df = df.copy()
         filtered_df = filtered_df[(filtered_df["TTM_PE"] >= min_pe) & (filtered_df["TTM_PE"] <= max_pe)]
         filtered_df = filtered_df[(filtered_df["ROE_Pct"] >= min_roe) & (filtered_df["ROE_Pct"] <= max_roe)]
@@ -200,7 +197,7 @@ with tab2:
 
         if not filtered_df.empty:
             
-            # --- VALUE CREATION MATH (Applied to Filtered Data) ---
+            # --- VALUE CREATION MATH ---
             filtered_df["EBIT_Cr"] = filtered_df["EBITDA_Cr"] * 0.9
             filtered_df["Book_Equity_Cr"] = np.where(filtered_df["Price_to_Book"] > 0, filtered_df["Market_Cap_Cr"] / filtered_df["Price_to_Book"], filtered_df["Market_Cap_Cr"])
             filtered_df["Capital_Employed_Cr"] = filtered_df["Total_Debt_Cr"] + filtered_df["Book_Equity_Cr"]
@@ -219,75 +216,128 @@ with tab2:
             filtered_df["Bubble_EV"] = filtered_df["Enterprise_Value_Cr"].clip(lower=1)
 
             # ==========================================
-            # FULL WIDTH GRAPHS WITH ENHANCED READABILITY
+            # NEW: 🎯 SINGLE STOCK DEEP-DIVE
             # ==========================================
-            
             st.markdown("---")
-            st.markdown("### 1. The Equity View (Market Cap & P/E Focus)")
+            st.markdown("### 🎯 Single Stock Deep-Dive: The 4-Point Value Matrix")
             
-            # 1. Profit Growth vs ROE
+            selected_stock = st.selectbox("Select a Stock from your filtered list to analyze:", filtered_df["Ticker"].unique())
+            
+            if selected_stock:
+                # Isolate the data for the chosen stock
+                stock_data = filtered_df[filtered_df["Ticker"] == selected_stock].iloc[0]
+                
+                # Construct a DataFrame exactly mapped to the 4 requested bubbles
+                deep_dive_df = pd.DataFrame({
+                    "Metric": [
+                        "1. Equity View (ROE)", 
+                        "2. Equity Spread (ROE - Ke)", 
+                        "3. Enterprise View (ROCE)", 
+                        "4. Enterprise Spread (ROCE - WACC)"
+                    ],
+                    "Growth_Axis": [
+                        stock_data["Yearly_Profit_Growth_Pct"],
+                        stock_data["Yearly_Profit_Growth_Pct"],
+                        stock_data["EBIT_Growth_Pct"],
+                        stock_data["EBIT_Growth_Pct"]
+                    ],
+                    "Value_Axis": [
+                        stock_data["ROE_Pct"],
+                        stock_data["ROE_Ke_Spread"],
+                        stock_data["ROCE_Pct"],
+                        stock_data["ROCE_WACC_Spread"]
+                    ],
+                    "Bubble_Size": [
+                        stock_data["Bubble_MCap"],
+                        stock_data["Bubble_MCap"],
+                        stock_data["Bubble_EV"],
+                        stock_data["Bubble_EV"]
+                    ],
+                    "Hover_Size_Label": [
+                        f"MCap: {stock_data['Market_Cap_Cr']:,.0f} Cr",
+                        f"MCap: {stock_data['Market_Cap_Cr']:,.0f} Cr",
+                        f"EV: {stock_data['Enterprise_Value_Cr']:,.0f} Cr",
+                        f"EV: {stock_data['Enterprise_Value_Cr']:,.0f} Cr"
+                    ],
+                    "Multiple_Label": [
+                        f"P/E: {stock_data['TTM_PE']:.1f}x",
+                        f"P/E: {stock_data['TTM_PE']:.1f}x",
+                        f"EV/EBITDA: {stock_data['EV_EBITDA']:.1f}x",
+                        f"EV/EBITDA: {stock_data['EV_EBITDA']:.1f}x"
+                    ]
+                })
+
+                # Plot the 4 specific dots with 4 distinct colors
+                fig_deep = px.scatter(
+                    deep_dive_df, 
+                    x="Growth_Axis", 
+                    y="Value_Axis", 
+                    color="Metric", 
+                    size="Bubble_Size",
+                    text="Multiple_Label",
+                    # 4 Distinct Colors: Navy, Red, Sky Blue, Amber
+                    color_discrete_sequence=["#1e3a8a", "#ef4444", "#0ea5e9", "#f59e0b"],
+                    title=f"{selected_stock} - Core Operations vs. Capital Engine"
+                )
+                
+                # Bundle the custom data so the Hover tool can access the formatted strings
+                fig_deep.update_traces(
+                    customdata=np.stack((deep_dive_df['Hover_Size_Label'], deep_dive_df['Multiple_Label']), axis=-1),
+                    textposition='top center', 
+                    textfont=dict(size=13, color="black", family="Arial Black"),
+                    marker=dict(line=dict(width=2, color="#0f172a")),
+                    hovertemplate="<b>%{hovertext}</b><br>Growth: %{x:.2f}%<br>Return/Spread: %{y:.2f}%<br>%{customdata[0]}<br>%{customdata[1]}<extra></extra>"
+                )
+                
+                fig_deep.add_hline(y=0, line_dash="dash", line_color="red", line_width=2, annotation_text="Value Destruction Boundary", annotation_position="bottom right", annotation_font=dict(size=16, color="red"))
+                
+                fig_deep.update_layout(
+                    height=700, 
+                    plot_bgcolor="white", 
+                    paper_bgcolor="white", 
+                    font=dict(color="#1e3a8a"),
+                    title=dict(font=dict(size=24, color="#0f172a")),
+                    xaxis=dict(**AXIS_STYLE, title="Growth Axis (%) [Profit Growth for Equity | EBIT Growth for Enterprise]"),
+                    yaxis=dict(**AXIS_STYLE, title="Return or Spread Axis (%)"),
+                    legend=dict(title=dict(text="Metric Type", font=dict(size=16)), font=dict(size=14))
+                )
+                
+                st.plotly_chart(fig_deep, use_container_width=True)
+
+            # ==========================================
+            # SECTOR COMPARISON GRAPHS
+            # ==========================================
+            st.markdown("---")
+            st.markdown("### Broad Market Comparison")
+            
             fig1 = px.scatter(
                 filtered_df, x="Yearly_Profit_Growth_Pct", y="ROE_Pct", size="Bubble_MCap", color="TTM_PE", 
-                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, 
-                title="Profit Growth vs. Return on Equity (ROE)"
+                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, title="Profit Growth vs. Return on Equity (ROE)"
             )
-            fig1.update_layout(
-                height=700, plot_bgcolor="white", paper_bgcolor="white", font=dict(color="#1e3a8a"),
-                title=dict(font=dict(size=24, color="#0f172a")),
-                xaxis=dict(**AXIS_STYLE, title="Profit Growth (%)"),
-                yaxis=dict(**AXIS_STYLE, title="Return on Equity (ROE) %")
-            )
-            fig1.update_traces(marker=dict(line=dict(width=1, color="#1e3a8a")))
+            fig1.update_layout(height=700, plot_bgcolor="white", paper_bgcolor="white", title=dict(font=dict(size=24, color="#0f172a")), xaxis=dict(**AXIS_STYLE, title="Profit Growth (%)"), yaxis=dict(**AXIS_STYLE, title="Return on Equity (ROE) %"))
             st.plotly_chart(fig1, use_container_width=True)
 
-            # 2. Profit Growth vs (ROE - Ke)
             fig2 = px.scatter(
                 filtered_df, x="Yearly_Profit_Growth_Pct", y="ROE_Ke_Spread", size="Bubble_MCap", color="TTM_PE", 
-                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, 
-                title="Profit Growth vs. Value Spread (ROE - Cost of Equity)"
+                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, title="Profit Growth vs. Value Spread (ROE - Ke)"
             )
             fig2.add_hline(y=0, line_dash="dash", line_color="red", line_width=3, annotation_text="Value Destruction", annotation_font=dict(size=16, color="red"), annotation_position="bottom right")
-            fig2.update_layout(
-                height=700, plot_bgcolor="white", paper_bgcolor="white", font=dict(color="#1e3a8a"),
-                title=dict(font=dict(size=24, color="#0f172a")),
-                xaxis=dict(**AXIS_STYLE, title="Profit Growth (%)"),
-                yaxis=dict(**AXIS_STYLE, title="Spread: ROE - Cost of Equity (%)")
-            )
-            fig2.update_traces(marker=dict(line=dict(width=1, color="#1e3a8a")))
+            fig2.update_layout(height=700, plot_bgcolor="white", paper_bgcolor="white", title=dict(font=dict(size=24, color="#0f172a")), xaxis=dict(**AXIS_STYLE, title="Profit Growth (%)"), yaxis=dict(**AXIS_STYLE, title="Spread: ROE - Ke (%)"))
             st.plotly_chart(fig2, use_container_width=True)
 
-            st.markdown("---")
-            st.markdown("### 2. The Enterprise View (Enterprise Value & EV/EBITDA Focus)")
-            
-            # 3. EBIT Growth vs ROCE
             fig3 = px.scatter(
                 filtered_df, x="EBIT_Growth_Pct", y="ROCE_Pct", size="Bubble_EV", color="EV_EBITDA", 
-                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, 
-                title="EBIT Growth vs. Return on Capital Employed (ROCE)"
+                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, title="EBIT Growth vs. Return on Capital Employed (ROCE)"
             )
-            fig3.update_layout(
-                height=700, plot_bgcolor="white", paper_bgcolor="white", font=dict(color="#1e3a8a"),
-                title=dict(font=dict(size=24, color="#0f172a")),
-                xaxis=dict(**AXIS_STYLE, title="EBIT Growth (%)"),
-                yaxis=dict(**AXIS_STYLE, title="ROCE (%)")
-            )
-            fig3.update_traces(marker=dict(line=dict(width=1, color="#1e3a8a")))
+            fig3.update_layout(height=700, plot_bgcolor="white", paper_bgcolor="white", title=dict(font=dict(size=24, color="#0f172a")), xaxis=dict(**AXIS_STYLE, title="EBIT Growth (%)"), yaxis=dict(**AXIS_STYLE, title="ROCE (%)"))
             st.plotly_chart(fig3, use_container_width=True)
 
-            # 4. EBIT Growth vs (ROCE - WACC)
             fig4 = px.scatter(
                 filtered_df, x="EBIT_Growth_Pct", y="ROCE_WACC_Spread", size="Bubble_EV", color="EV_EBITDA", 
-                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, 
-                title="EBIT Growth vs. Value Spread (ROCE - WACC)"
+                hover_name="Ticker", color_continuous_scale=HEATMAP_COLORS, title="EBIT Growth vs. Value Spread (ROCE - WACC)"
             )
             fig4.add_hline(y=0, line_dash="dash", line_color="red", line_width=3, annotation_text="Value Destruction", annotation_font=dict(size=16, color="red"), annotation_position="bottom right")
-            fig4.update_layout(
-                height=700, plot_bgcolor="white", paper_bgcolor="white", font=dict(color="#1e3a8a"),
-                title=dict(font=dict(size=24, color="#0f172a")),
-                xaxis=dict(**AXIS_STYLE, title="EBIT Growth (%)"),
-                yaxis=dict(**AXIS_STYLE, title="Spread: ROCE - WACC (%)")
-            )
-            fig4.update_traces(marker=dict(line=dict(width=1, color="#1e3a8a")))
+            fig4.update_layout(height=700, plot_bgcolor="white", paper_bgcolor="white", title=dict(font=dict(size=24, color="#0f172a")), xaxis=dict(**AXIS_STYLE, title="EBIT Growth (%)"), yaxis=dict(**AXIS_STYLE, title="Spread: ROCE - WACC (%)"))
             st.plotly_chart(fig4, use_container_width=True)
 
             st.markdown("---")
@@ -305,8 +355,6 @@ with tab2:
                     )
                     fig_risk.update_layout(height=600, plot_bgcolor="white", paper_bgcolor="white", font=dict(color="#1e3a8a"), title=dict(font=dict(size=22, color="#0f172a")), yaxis=dict(title_font=dict(size=16), tickfont=dict(size=14)))
                     st.plotly_chart(fig_risk, use_container_width=True)
-                else:
-                    st.info("Beta data is not available.")
 
             show_valuation_plot = st.checkbox("📊 View Unlevered Valuation (EV/EBITDA vs P/E)")
             if show_valuation_plot:
@@ -320,8 +368,6 @@ with tab2:
                     )
                     fig_val.update_layout(height=600, plot_bgcolor="white", paper_bgcolor="white", font=dict(color="#1e3a8a"), title=dict(font=dict(size=22, color="#0f172a")), yaxis=dict(title_font=dict(size=16), tickfont=dict(size=14)))
                     st.plotly_chart(fig_val, use_container_width=True)
-                else:
-                    st.info("EV/EBITDA data is not available.")
             
             st.markdown("---")
 
