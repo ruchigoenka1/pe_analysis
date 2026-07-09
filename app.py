@@ -242,6 +242,7 @@ with tab2:
         
         if not filtered_df.empty:
             # High-Contrast 3-Color Scale Chart
+            # Reactive Heatmap: Multi-Stage Continuous Gradient
             fig2 = px.scatter(
                 filtered_df, 
                 x="Yearly_Profit_Growth_Pct", 
@@ -249,12 +250,15 @@ with tab2:
                 size="Market_Cap_Cr", 
                 color="TTM_PE", 
                 hover_name="Ticker",
+                # Smooth multi-step transition for deep contrast and high nuance
                 color_continuous_scale=[
-                    [0.0, "#0284c7"],  
-                    [0.45, "#0284c7"], 
-                    [0.5, "#94a3b8"],  
-                    [0.55, "#dc2626"], 
-                    [1.0, "#dc2626"]   
+                    [0.0, "#1e3a8a"],   # 0% - Deep Navy (Deep Value)
+                    [0.2, "#0ea5e9"],   # 20% - Bright Sky Blue (Comfortable Value)
+                    [0.4, "#93c5fd"],   # 40% - Soft Light Blue (Leaning Fair)
+                    [0.5, "#e2e8f0"],   # 50% - Light Slate Grey (Fair Value Anchor)
+                    [0.6, "#fca5a5"],   # 60% - Soft Rose Red (Slightly Premium)
+                    [0.8, "#ef4444"],   # 80% - Vibrant Crimson (Highly Valued)
+                    [1.0, "#7f1d1d"]    # 100% - Dark Maroon (Extreme/Risk Zone)
                 ],
                 range_color=[float(filtered_df["TTM_PE"].min()), float(filtered_df["TTM_PE"].max())],
                 title=f"Filtered Matrix: {len(filtered_df)} Stocks"
@@ -278,8 +282,7 @@ with tab2:
             )
             fig2.update_traces(marker=dict(line=dict(width=1.5, color="#1e3a8a")))
             
-            st.plotly_chart(fig2, use_container_width=True, theme=None)
-            
+            st.plotly_chart(fig2, use_container_width=True, theme=None)            
             # Collapsible Data Table (Using absolute display values)
             with st.expander("📋 View Screened Data Table", expanded=True):
                 st.dataframe(
